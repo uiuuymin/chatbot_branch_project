@@ -246,33 +246,7 @@ GET /branches/{branch_id}/tags
 GET /sessions/{session_id}/search?q=트랜스포머
 ```
 
-## GitHub 업로드 전 주의
-
-아래 파일은 GitHub에 올리면 안 됩니다.
-
-- `.env`
-- `chat.db`
-- `__pycache__/`
-- `*.pyc`
-- `.venv/`
-
-`.env`에는 API key가 들어가고, `chat.db`에는 로컬 대화 데이터가 들어갑니다.
-
-## 팀원이 실행할 때 필요한 것
-
-팀원이 이 프로젝트를 받은 뒤에는 아래 순서대로 하면 됩니다.
-
-```cmd
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-그 다음 프로젝트 루트에 `.env` 파일을 만들고:
-
-```env
-OPENAI_API_KEY=sk-...
-```
+## 실행
 
 서버 실행:
 
