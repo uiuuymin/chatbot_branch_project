@@ -1,11 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.database import engine, Base
 import app.models.models  # Base에 테이블 등록
 from app.routers import sessions, branches, graph, tags
 
 Base.metadata.create_all(bind=engine)
+
+# create_all은 기존 테이블에 새 컬럼을 추가해주지 않으므로, 누락된 컬럼은 직접 보강한다.
+_inspector = inspect(engine)
+if "branches" in _inspector.get_table_names():
+    _existing_columns = {c["name"] for c in _inspector.get_columns("branches")}
+    if "is_merge" not in _existing_columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE branches ADD COLUMN is_merge BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
 
 app = FastAPI(title="LLM 채팅 브랜치 시각화 서비스")
 

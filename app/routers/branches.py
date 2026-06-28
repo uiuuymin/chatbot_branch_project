@@ -4,12 +4,17 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.schemas import (
     ChatRequest, ChatResponse, MessageOut, BranchOut, CreateBranchRequest,
-    UpdateBranchNameRequest, PatchBranchRequest,
+    UpdateBranchNameRequest, PatchBranchRequest, MergeBranchRequest,
 )
 from app.repositories import repository
-from app.services import llm_service, auto_tagger
+from app.services import llm_service, auto_tagger, context_builder
 
 router = APIRouter(tags=["Branches & Chat"])
+
+
+def _with_merge_parent_ids(db, branch):
+    branch.merge_parent_ids = repository.get_merge_parent_ids(db, branch.id)
+    return branch
 
 
 @router.post("/chat", response_model=ChatResponse, summary="메시지 전송 및 AI 응답")
@@ -32,19 +37,14 @@ def make_branch(req: CreateBranchRequest, db: Session = Depends(get_db)):
     - `parent_branch_id`: 분기할 기존 브랜치 ID
     - `fork_from_message_id`: 분기 기준 메시지 ID (이 메시지까지의 맥락을 공유함)
     - 새 브랜치가 생성되면 부모 브랜치 대화 전체를 분석해 태그를 자동으로 답니다.
+    - `name`을 비워두면 일단 "새 가지"로 생성되고, 이 브랜치에서 첫 질문/답변이 오가면
+      그 내용을 기준으로 이름이 자동으로 다시 지어집니다.
 
     **검증 조건**
     - `parent_branch_id`가 해당 session에 속해야 합니다.
     - `fork_from_message_id`가 parent branch의 메시지여야 합니다.
     """
-    # name이 없으면 fork 메시지 내용 기준으로 자동 생성
-    name = req.name
-    if not name:
-        fork_msg = repository.get_message(db, req.fork_from_message_id)
-        if fork_msg:
-            name = auto_tagger.generate_name_from_message(fork_msg.content)
-        else:
-            name = "새 가지"
+    name = req.name or "새 가지"
 
     try:
         branch = repository.create_branch(
@@ -54,7 +54,36 @@ def make_branch(req: CreateBranchRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
     auto_tagger.auto_tag_branch(db, req.session_id, req.parent_branch_id)
-    return branch
+    return _with_merge_parent_ids(db, branch)
+
+
+@router.post("/branches/merge", response_model=BranchOut, summary="브랜치 머지")
+def merge_branches(req: MergeBranchRequest, db: Session = Depends(get_db)):
+    """선택한 여러 브랜치를 부모로 갖는 새 브랜치를 만듭니다.
+
+    - `parent_branch_ids`: 머지할 브랜치 2개 이상.
+    - 각 부모 브랜치는 분기 이전 조상 맥락까지 포함한 전체 대화를 AI로 요약하고,
+      그 요약들을 새 브랜치의 초기 context로 사용합니다 (원문 전체를 그대로 이어붙이지 않음).
+    - `name`을 비워두면 "병합 브랜치"로 생성되고, 첫 질문/답변이 오가면 자동으로 이름이 다시 지어집니다.
+    """
+    if len(set(req.parent_branch_ids)) < 2:
+        raise HTTPException(status_code=422, detail="parent_branch_ids는 서로 다른 브랜치 2개 이상이어야 합니다.")
+
+    summaries = {}
+    for parent_id in req.parent_branch_ids:
+        parent = repository.get_branch(db, parent_id)
+        if parent is None or parent.session_id != req.session_id:
+            raise HTTPException(status_code=400, detail=f"branch '{parent_id}'가 해당 session에 속하지 않습니다.")
+        messages = context_builder.get_full_branch_messages(db, parent_id)
+        summaries[parent_id] = auto_tagger.summarize_branch_for_merge(messages)
+
+    name = req.name or "병합 브랜치"
+    try:
+        branch = repository.create_merge_branch(db, req.session_id, summaries, name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return _with_merge_parent_ids(db, branch)
 
 
 @router.post("/branches/{branch_id}/auto-name", summary="브랜치 이름 자동 생성")
@@ -103,7 +132,7 @@ def patch_branch(branch_id: str, req: PatchBranchRequest, db: Session = Depends(
         raise HTTPException(status_code=400, detail=str(e))
     if branch is None:
         raise HTTPException(status_code=404, detail="branch를 찾을 수 없습니다.")
-    return branch
+    return _with_merge_parent_ids(db, branch)
 
 
 @router.patch("/branches/{branch_id}/name", response_model=BranchOut, summary="브랜치 이름 수정")
@@ -118,7 +147,7 @@ def update_branch_name(branch_id: str, req: UpdateBranchNameRequest, db: Session
     branch = repository.update_branch_name(db, branch_id, req.name.strip())
     if branch is None:
         raise HTTPException(status_code=404, detail="branch를 찾을 수 없습니다.")
-    return branch
+    return _with_merge_parent_ids(db, branch)
 
 
 @router.get("/branches/{branch_id}/messages", response_model=list[MessageOut], summary="브랜치 메시지 조회")

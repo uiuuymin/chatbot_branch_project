@@ -3,6 +3,7 @@ import { listSessions, createSession, getSessionGraph } from "./api";
 import SessionSidebar from "./components/SessionSidebar";
 import ChatPanel from "./components/ChatPanel";
 import GraphPanel from "./components/GraphPanel";
+import MemoryPanel from "./components/MemoryPanel";
 import "./App.css";
 
 function findRootBranchId(graph) {
@@ -17,6 +18,7 @@ function App() {
   const [sessionId, setSessionId] = useState(null);
   const [graph, setGraph] = useState(null);
   const [branchId, setBranchId] = useState(null);
+  const [rightTab, setRightTab] = useState("graph");
 
   const refreshSessions = async () => {
     const data = await listSessions();
@@ -65,6 +67,7 @@ function App() {
         selectedSessionId={sessionId}
         onSelect={handleSelectSession}
         onCreate={handleCreateSession}
+        onSelectBranch={handleSelectBranch}
       />
       <div className="chat-area">
         <ChatPanel
@@ -75,11 +78,23 @@ function App() {
         />
       </div>
       <div className="graph-area">
-        <GraphPanel
-          graph={graph}
-          selectedBranchId={branchId}
-          onSelectBranch={handleSelectBranch}
-        />
+        <div className="right-tabs">
+          <button className={rightTab === "graph" ? "active" : ""} onClick={() => setRightTab("graph")}>그래프 / 브랜치 관리</button>
+          <button className={rightTab === "memory" ? "active" : ""} onClick={() => setRightTab("memory")}>메모리</button>
+        </div>
+        <div className="right-tab-content">
+          {rightTab === "graph" && (
+            <GraphPanel
+              graph={graph}
+              sessionId={sessionId}
+              selectedBranchId={branchId}
+              onSelectBranch={handleSelectBranch}
+              onChanged={() => refreshGraph(sessionId)}
+              onBranchCreated={handleBranchCreated}
+            />
+          )}
+          {rightTab === "memory" && <MemoryPanel sessionId={sessionId} />}
+        </div>
       </div>
     </div>
   );

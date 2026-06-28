@@ -24,6 +24,7 @@ def handle_chat(db, req) -> str:
         raise HTTPException(status_code=409, detail=f"branch가 '{branch.status}' 상태입니다. 채팅은 active 브랜치에서만 가능합니다.")
 
     is_first_message = branch.head_id is None
+    is_first_branch_message = repository.count_branch_chat_messages(db, req.branch_id) == 0
 
     context = context_builder.build_context(db, req.branch_id, req.message)
 
@@ -70,5 +71,9 @@ def handle_chat(db, req) -> str:
     if is_first_message:
         title = auto_tagger.generate_session_name(req.message, answer)
         repository.update_session_title(db, branch.session_id, title)
+
+    if is_first_branch_message and (branch.parent_branch_id is not None or branch.is_merge):
+        branch_name = auto_tagger.generate_branch_name_from_qa(req.message, answer)
+        repository.update_branch_name(db, branch.id, branch_name)
 
     return answer

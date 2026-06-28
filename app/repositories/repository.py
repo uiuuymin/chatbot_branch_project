@@ -1,6 +1,6 @@
 import uuid
 
-from app.models.models import Message, Branch, Conversation, Tag, BranchTag
+from app.models.models import Message, Branch, Conversation, Tag, BranchTag, BranchMergeParent
 
 
 # ── Message ───────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ def update_branch_status(db, branch_id: str, status: str | None, is_collapsed: b
     branch = get_branch(db, branch_id)
     if branch is None:
         return None
-    if branch.parent_branch_id is None and status in ("inactive", "deleted"):
+    if branch.parent_branch_id is None and not branch.is_merge and status in ("inactive", "deleted"):
         raise ValueError("root branch는 비활성화하거나 삭제할 수 없습니다")
     if status is not None:
         branch.status = status
@@ -184,6 +184,89 @@ def create_branch(db, session_id, parent_branch_id, fork_from_message_id, name="
     db.add(branch)
     db.commit()
     return branch
+
+
+def create_merge_branch(db, session_id: str, parent_summaries: dict[str, str], name="병합 브랜치"):
+    """여러 브랜치를 부모로 갖는 머지 브랜치를 생성한다.
+
+    parent_summaries: {parent_branch_id: summary} — 각 부모 브랜치 전체 맥락의 요약.
+    머지 브랜치는 단일 fork 지점이 없으므로 parent_branch_id / fork_from_message_id는 비워둔다.
+    각 요약은 (user, assistant) 메시지 쌍으로도 저장해서, 채팅창을 열면 합쳐지는 브랜치들의
+    요약이 대화 맨 앞에 바로 보이고 LLM context에도 자연스럽게 포함되게 한다.
+    """
+    parents = {pid: get_branch(db, pid) for pid in parent_summaries}
+    if any(p is None or p.session_id != session_id for p in parents.values()):
+        raise ValueError("parent_branch_ids가 해당 session에 속하지 않습니다")
+
+    branch = Branch(
+        id=str(uuid.uuid4()),
+        session_id=session_id,
+        parent_branch_id=None,
+        fork_from_message_id=None,
+        name=name,
+        head_id=None,
+        status="active",
+        is_collapsed=False,
+        is_merge=True,
+    )
+    db.add(branch)
+    db.flush()
+
+    last_message_id = None
+    for parent_id, summary in parent_summaries.items():
+        db.add(BranchMergeParent(branch_id=branch.id, parent_branch_id=parent_id, summary=summary))
+
+        intro = save_message(
+            db, session_id=session_id, branch_id=branch.id, role="user",
+            content=f"[브랜치 '{parents[parent_id].name}' 요약]\n{summary}", parent_id=last_message_id,
+        )
+        ack = save_message(
+            db, session_id=session_id, branch_id=branch.id, role="assistant",
+            content="확인했습니다.", parent_id=intro.id,
+        )
+        last_message_id = ack.id
+
+    branch.head_id = last_message_id
+    db.commit()
+    return branch
+
+
+def count_branch_chat_messages(db, branch_id: str) -> int:
+    """머지 시 자동 삽입된 요약 메시지를 제외하고, 실제 채팅으로 만들어진 메시지 수를 센다.
+
+    채팅으로 생성된 메시지는 항상 model_provider가 채워져 있고, 머지 요약 메시지는 비어 있다.
+    """
+    return (
+        db.query(Message)
+        .filter(
+            Message.branch_id == branch_id,
+            Message.status == "active",
+            Message.model_provider.isnot(None),
+        )
+        .count()
+    )
+
+
+def get_branch_merge_parents(db, branch_id: str) -> list[BranchMergeParent]:
+    return (
+        db.query(BranchMergeParent)
+        .filter(BranchMergeParent.branch_id == branch_id)
+        .all()
+    )
+
+
+def get_merge_parent_ids(db, branch_id: str) -> list[str]:
+    return [mp.parent_branch_id for mp in get_branch_merge_parents(db, branch_id)]
+
+
+def list_merge_edges(db, session_id: str) -> list[BranchMergeParent]:
+    """session 내 모든 머지 관계(branch_id, parent_branch_id, summary)를 반환한다."""
+    return (
+        db.query(BranchMergeParent)
+        .join(Branch, Branch.id == BranchMergeParent.branch_id)
+        .filter(Branch.session_id == session_id)
+        .all()
+    )
 
 
 # ── Tag ───────────────────────────────────────────────────────────────────────

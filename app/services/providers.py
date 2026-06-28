@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import os
 
 from dotenv import load_dotenv
 
@@ -23,6 +24,7 @@ class OpenAIProvider(LLMProvider):
         return content, response.usage.prompt_tokens, response.usage.completion_tokens
 
 
+
 class AnthropicProvider(LLMProvider):
     def __init__(self):
         import anthropic
@@ -39,7 +41,25 @@ class AnthropicProvider(LLMProvider):
         return content, response.usage.input_tokens, response.usage.output_tokens
 
 
+_CHATKHU_BASE_URL = "https://factchat-cloud.mindlogic.ai/v1/gateway"
+
 _PROVIDERS: dict[str, LLMProvider] = {}
+
+class ChatKHUProvider(LLMProvider):
+    """경희대 AI Gateway — OpenAI 호환 엔드포인트 사용."""
+
+    def __init__(self):
+        from openai import OpenAI
+        api_key = os.environ.get("CHATKHU_API_KEY")
+        if not api_key:
+            raise ValueError("CHATKHU_API_KEY가 .env에 설정되지 않았습니다.")
+        self._client = OpenAI(api_key=api_key, base_url=_CHATKHU_BASE_URL)
+
+    def generate(self, context, model_name, system_prompt):
+        messages = [{"role": "system", "content": system_prompt}] + context
+        response = self._client.chat.completions.create(model=model_name, messages=messages)
+        content = response.choices[0].message.content
+        return content, response.usage.prompt_tokens, response.usage.completion_tokens
 
 
 def get_provider(model_provider: str) -> LLMProvider:
@@ -49,6 +69,8 @@ def get_provider(model_provider: str) -> LLMProvider:
             _PROVIDERS["openai"] = OpenAIProvider()
         elif model_provider == "anthropic":
             _PROVIDERS["anthropic"] = AnthropicProvider()
+        elif model_provider == "chatkhu":
+            _PROVIDERS["chatkhu"] = ChatKHUProvider()
         else:
-            raise ValueError(f"지원하지 않는 model_provider: '{model_provider}'. openai / anthropic 중 하나를 사용하세요.")
+            raise ValueError(f"지원하지 않는 model_provider: '{model_provider}'. openai / anthropic / chatkhu 중 하나를 사용하세요.")
     return _PROVIDERS[model_provider]

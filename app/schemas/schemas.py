@@ -40,7 +40,13 @@ class CreateBranchRequest(BaseModel):
     session_id: str
     parent_branch_id: str
     fork_from_message_id: int
-    name: str | None = None  # None이면 fork 메시지 기준으로 자동 생성
+    name: str | None = None  # None이면 "새 가지"로 생성 후 첫 대화 기준으로 자동 갱신
+
+
+class MergeBranchRequest(BaseModel):
+    session_id: str
+    parent_branch_ids: list[str]   # 합칠 브랜치들 (2개 이상)
+    name: str | None = None        # None이면 "병합 브랜치"로 생성 후 첫 대화 기준으로 자동 갱신
 
 
 class UpdateBranchNameRequest(BaseModel):
@@ -61,6 +67,8 @@ class BranchOut(BaseModel):
     head_id: int | None
     status: str
     is_collapsed: bool
+    is_merge: bool
+    merge_parent_ids: list[str] = []
     created_at: str
 
     model_config = {"from_attributes": True}
@@ -130,6 +138,7 @@ class GraphNode(BaseModel):
     label: str                 # 브랜치 이름
     status: str                # active / inactive / deleted
     is_collapsed: bool
+    is_merge: bool             # 여러 브랜치를 합친 머지 브랜치인지 여부
     message_count: int
 
 
@@ -137,7 +146,7 @@ class GraphEdge(BaseModel):
     id: str
     source: str                # parent branch id
     target: str                # child branch id
-    type: str                  # "fork"
+    type: str                  # "fork" / "merge"
     fork_from_message_id: int | None
 
 

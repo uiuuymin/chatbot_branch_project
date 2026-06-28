@@ -23,8 +23,23 @@ class Branch(Base):
     head_id = Column(Integer, nullable=True)
     status = Column(Text, nullable=False, server_default="active")   # active / inactive / deleted
     is_collapsed = Column(Boolean, nullable=False, server_default="0")
+    is_merge = Column(Boolean, nullable=False, server_default="0")    # 여러 브랜치를 합친 머지 브랜치인지 여부
     created_at = Column(Text, nullable=False, server_default=text("(datetime('now'))"))
     updated_at = Column(Text, nullable=False, server_default=text("(datetime('now'))"))
+
+
+class BranchMergeParent(Base):
+    """머지 브랜치 하나가 가질 수 있는 여러 부모 브랜치 관계.
+
+    일반 분기는 Branch.parent_branch_id(단일)로 표현하지만,
+    머지 브랜치는 부모가 여럿이라 별도 테이블로 관리한다.
+    """
+    __tablename__ = "branch_merge_parents"
+
+    branch_id = Column(Text, ForeignKey("branches.id"), primary_key=True)
+    parent_branch_id = Column(Text, ForeignKey("branches.id"), primary_key=True)
+    summary = Column(Text, nullable=False)   # 머지 시점에 parent 브랜치 전체 맥락을 요약한 내용
+    created_at = Column(Text, nullable=False, server_default=text("(datetime('now'))"))
 
 
 class Message(Base):

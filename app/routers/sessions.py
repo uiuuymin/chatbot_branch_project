@@ -66,8 +66,12 @@ def session_branches(session_id: str, db: Session = Depends(get_db)):
 
     - root branch(main)와 사용자가 생성한 child branch가 모두 포함됩니다.
     - `parent_branch_id`와 `fork_from_message_id`로 분기 관계를 확인할 수 있습니다.
+    - `is_merge`가 true인 브랜치는 `merge_parent_ids`에 담긴 여러 브랜치를 부모로 갖습니다.
     """
-    return repository.list_branches(db, session_id)
+    branches = repository.list_branches(db, session_id)
+    for branch in branches:
+        branch.merge_parent_ids = repository.get_merge_parent_ids(db, branch.id)
+    return branches
 
 
 @router.get("/sessions/{session_id}/memory", response_model=MemoryOut, summary="세션 메모리 조회")

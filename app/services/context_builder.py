@@ -6,7 +6,8 @@ def build_context(db, branch_id: str, new_user_message: str) -> list[dict]:
 
     1. 세션 메모리(사용자 정보)를 context 맨 앞에 주입한다.
     2. 부모 브랜치는 fork_from_message_id 이전 메시지까지만 포함하고,
-       현재 브랜치는 전체 메시지를 포함한다.
+       현재 브랜치는 전체 메시지를 포함한다. 머지 브랜치는 부모 브랜치 요약이
+       (user, assistant) 메시지 쌍으로 이미 본인 메시지에 저장되어 있으므로 그대로 포함된다.
     3. 다른 브랜치에서 유사 메시지를 벡터 검색해 참고 context로 추가한다.
     4. 마지막에 새 사용자 메시지를 추가해 반환한다.
     """
@@ -15,19 +16,13 @@ def build_context(db, branch_id: str, new_user_message: str) -> list[dict]:
     branch = repository.get_branch(db, branch_id)
     memory = repository.get_session_memory(db, branch.session_id)
 
-    branch_chain = get_branch_ancestor_chain(db, branch_id)
-    ancestor_ids = [b.id for b in branch_chain]
-    context_messages = []
-
-    for i, b in enumerate(branch_chain):
-        if b.id == branch_id:
-            msgs = repository.get_branch_messages(db, b.id)
-        else:
-            child = branch_chain[i + 1]
-            msgs = repository.get_messages_until(db, b.id, child.fork_from_message_id)
-        context_messages.extend(msgs)
-
-    context_messages = fit_to_token_budget(context_messages)
+    if branch.is_merge:
+        ancestor_ids = [branch_id] + repository.get_merge_parent_ids(db, branch_id)
+        context_messages = fit_to_token_budget(repository.get_branch_messages(db, branch_id))
+    else:
+        branch_chain = get_branch_ancestor_chain(db, branch_id)
+        ancestor_ids = [b.id for b in branch_chain]
+        context_messages = fit_to_token_budget(get_full_branch_messages(db, branch_id, branch_chain))
 
     # 다른 브랜치에서 유사 메시지 검색
     try:
@@ -51,6 +46,21 @@ def build_context(db, branch_id: str, new_user_message: str) -> list[dict]:
     result.extend([{"role": m.role, "content": m.content} for m in context_messages])
     result.append({"role": "user", "content": new_user_message})
     return result
+
+
+def get_full_branch_messages(db, branch_id: str, branch_chain: list | None = None) -> list:
+    """branch의 분기 이전 조상 맥락 + 본인 메시지 전체를 시간순으로 반환한다."""
+    if branch_chain is None:
+        branch_chain = get_branch_ancestor_chain(db, branch_id)
+
+    messages = []
+    for i, b in enumerate(branch_chain):
+        if b.id == branch_id:
+            messages.extend(repository.get_branch_messages(db, b.id))
+        else:
+            child = branch_chain[i + 1]
+            messages.extend(repository.get_messages_until(db, b.id, child.fork_from_message_id))
+    return messages
 
 
 def get_branch_ancestor_chain(db, branch_id: str) -> list:

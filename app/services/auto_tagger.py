@@ -40,12 +40,12 @@ def generate_session_name(user_message: str, assistant_message: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def generate_name_from_message(message_content: str) -> str:
-    """fork 기준 메시지 내용을 보고 브랜치 이름을 생성한다."""
+def generate_branch_name_from_qa(user_message: str, answer: str) -> str:
+    """분기 후 해당 브랜치에서 처음 나눈 질문/답변을 보고 브랜치 이름을 생성한다."""
     prompt = (
-        "다음 메시지에서 시작되는 대화 브랜치의 이름을 10글자 이내로 지어줘. "
+        "다음 질문과 답변을 보고 이 대화 브랜치의 이름을 10글자 이내로 지어줘. "
         "이름만 답해줘. 다른 말은 하지 마.\n\n"
-        f"메시지: {message_content}\n\n이름:"
+        f"질문: {user_message}\n답변: {answer}\n\n이름:"
     )
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -67,6 +67,24 @@ def generate_name_from_conversation(messages: list) -> str:
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=30,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def summarize_branch_for_merge(messages: list) -> str:
+    """머지 시 다른 브랜치와 합칠 수 있도록 브랜치 전체 맥락을 요약한다."""
+    if not messages:
+        return "(대화 없음)"
+    conversation = "\n".join([f"{m.role}: {m.content}" for m in messages])
+    prompt = (
+        "다음 대화를 다른 브랜치의 대화와 합쳐서 참고할 수 있도록 핵심 내용 요약해줘. "
+        "요약만 답해줘. 다른 말은 하지 마.\n\n"
+        f"{conversation}\n\n요약:"
+    )
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200,
     )
     return response.choices[0].message.content.strip()
 

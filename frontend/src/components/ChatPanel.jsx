@@ -1,12 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { getBranchMessages, sendChat, createBranch } from "../api";
 
+const MODEL_OPTIONS = [
+  { provider: "openai", name: "gpt-4o-mini", label: "OpenAI - GPT-4o mini" },
+  { provider: "anthropic", name: "claude-3-5-sonnet-latest", label: "Anthropic - Claude 3.5 Sonnet" },
+  { provider: "chatkhu", name: "claude-sonnet-4-6", label: "ChatKHU - Claude Sonnet 4.6" },
+  { provider: "chatkhu", name: "gpt-5.4-nano", label: "ChatKHU - GPT-5.4 nano" },
+  { provider: "chatkhu", name: "claude-haiku-4-5-20251001", label: "ChatKHU - Claude Haiku 4.5" },
+  { provider: "chatkhu", name: "gemini-3.1-flash-lite", label: "ChatKHU - Gemini 3.1 Flash-Lite" },
+];
+
 export default function ChatPanel({ sessionId, branchId, onBranchCreated, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [forkName, setForkName] = useState("");
   const [forkTargetMsgId, setForkTargetMsgId] = useState(null);
+  const [forkTargetBranchId, setForkTargetBranchId] = useState(null);
+  const [modelKey, setModelKey] = useState(`${MODEL_OPTIONS[0].provider}::${MODEL_OPTIONS[0].name}`);
   const bottomRef = useRef(null);
 
   const loadMessages = async () => {
@@ -27,7 +38,8 @@ export default function ChatPanel({ sessionId, branchId, onBranchCreated, onMess
     if (!input.trim() || !branchId) return;
     setSending(true);
     try {
-      await sendChat(branchId, input.trim());
+      const [provider, model] = modelKey.split("::");
+      await sendChat(branchId, input.trim(), provider, model);
       setInput("");
       await loadMessages();
       onMessageSent?.();
@@ -38,14 +50,16 @@ export default function ChatPanel({ sessionId, branchId, onBranchCreated, onMess
     }
   };
 
-  const handleFork = async (messageId) => {
+  const handleFork = async (messageId, messageBranchId) => {
     setForkTargetMsgId(messageId);
+    setForkTargetBranchId(messageBranchId);
   };
 
   const confirmFork = async () => {
     try {
-      const branch = await createBranch(sessionId, branchId, forkTargetMsgId, forkName || null);
+      const branch = await createBranch(sessionId, forkTargetBranchId, forkTargetMsgId, forkName || null);
       setForkTargetMsgId(null);
+      setForkTargetBranchId(null);
       setForkName("");
       onBranchCreated(branch);
     } catch (err) {
@@ -61,7 +75,7 @@ export default function ChatPanel({ sessionId, branchId, onBranchCreated, onMess
         {messages.map((m) => (
           <div key={m.id} className={`chat-bubble ${m.role}`}>
             <div className="chat-bubble-content">{m.content}</div>
-            <button className="fork-btn" onClick={() => handleFork(m.id)} title="이 메시지에서 분기">
+            <button className="fork-btn" onClick={() => handleFork(m.id, m.branch_id)} title="이 메시지에서 분기">
               🌿 분기
             </button>
           </div>
@@ -78,11 +92,23 @@ export default function ChatPanel({ sessionId, branchId, onBranchCreated, onMess
             onChange={(e) => setForkName(e.target.value)}
           />
           <button onClick={confirmFork}>생성</button>
-          <button onClick={() => setForkTargetMsgId(null)}>취소</button>
+          <button onClick={() => { setForkTargetMsgId(null); setForkTargetBranchId(null); }}>취소</button>
         </div>
       )}
 
       <div className="chat-input-row">
+        <select
+          className="model-select"
+          value={modelKey}
+          onChange={(e) => setModelKey(e.target.value)}
+          disabled={sending}
+        >
+          {MODEL_OPTIONS.map((opt) => (
+            <option key={`${opt.provider}::${opt.name}`} value={`${opt.provider}::${opt.name}`}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}

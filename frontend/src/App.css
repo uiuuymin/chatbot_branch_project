@@ -110,6 +110,11 @@ body {
   flex: 1;
 }
 
+.chat-input-row .model-select {
+  flex: 0 0 auto;
+  max-width: 220px;
+}
+
 .fork-modal {
   display: flex;
   gap: 6px;
@@ -121,6 +126,95 @@ body {
 
 .graph-area {
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-tabs {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+}
+
+.right-tabs button {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: #f4f4f7;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.right-tabs button.active {
+  background: #fff;
+  border-bottom: 2px solid #4f46e5;
+  font-weight: 600;
+}
+
+.right-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.graph-panel-split {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.graph-canvas-wrap {
+  flex: 1 1 55%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-flow-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+.graph-detail-wrap {
+  flex: 1 1 45%;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid #ddd;
+}
+
+.graph-node-label {
+  font-size: 12px;
+  text-align: left;
+}
+
+.graph-node-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.graph-node-meta {
+  display: flex;
+  align-items: center;
+  color: #666;
+  font-size: 11px;
+}
+
+.graph-node-expand-btn {
+  margin-top: 4px;
+  width: 100%;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #ca8a04;
+  background: #fef9c3;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .panel-empty {
@@ -129,4 +223,117 @@ body {
   justify-content: center;
   height: 100%;
   color: #999;
+}
+
+.branch-manage-panel,
+.memory-panel {
+  padding: 14px;
+}
+
+.bmp-section {
+  margin-bottom: 16px;
+}
+
+.bmp-section label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.bmp-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.bmp-row input,
+.bmp-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.bmp-hint {
+  font-size: 12px;
+  color: #999;
+}
+
+.tag-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.tag-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.memory-textarea {
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  padding: 8px;
+}
+
+.branch-search {
+  margin-top: 16px;
+  border-top: 1px solid #ddd;
+  padding-top: 12px;
+}
+
+.search-result-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.search-result-list li {
+  padding: 6px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.search-result-list li:hover {
+  background: #e5e7eb;
+}
+
+.search-result-tags {
+  color: #888;
+  font-size: 11px;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: #999;
+}
+
+.status-dot.active {
+  background: #16a34a;
+}
+
+.status-dot.inactive {
+  background: #d97706;
+}
+
+.status-dot.deleted {
+  background: #dc2626;
 }

@@ -46,10 +46,55 @@ export const createBranch = (sessionId, parentBranchId, forkFromMessageId, name 
     })
     .then((r) => r.data);
 
+export const mergeBranches = (sessionId, parentBranchIds, name = null) =>
+  api
+    .post("/branches/merge", {
+      session_id: sessionId,
+      parent_branch_ids: parentBranchIds,
+      name,
+    })
+    .then((r) => r.data);
+
 export const patchBranch = (branchId, body) =>
   api.patch(`/branches/${branchId}`, body).then((r) => r.data);
 
+export const updateBranchName = (branchId, name) =>
+  api.patch(`/branches/${branchId}/name`, { name }).then((r) => r.data);
+
+export const autoNameBranch = (branchId) =>
+  api.post(`/branches/${branchId}/auto-name`).then((r) => r.data);
+
+export const autoTagBranch = (branchId) =>
+  api.post(`/branches/${branchId}/auto-tag`).then((r) => r.data);
+
+export const listSessionBranches = (sessionId) =>
+  api.get(`/sessions/${sessionId}/branches`).then((r) => r.data);
+
+export const searchBranches = (sessionId, q) =>
+  api.get(`/sessions/${sessionId}/search`, { params: { q } }).then((r) => r.data);
+
+export const getSessionTags = (sessionId) =>
+  api.get(`/sessions/${sessionId}/tags`).then((r) => r.data);
+
+export const getBranchTags = (branchId) =>
+  api.get(`/branches/${branchId}/tags`).then((r) => r.data);
+
+export const createTag = (sessionId, name, color = null, type = "normal") =>
+  api.post("/tags", { session_id: sessionId, name, color, type }).then((r) => r.data);
+
+export const addBranchTag = (branchId, tagId) =>
+  api.post(`/branches/${branchId}/tags`, { tag_id: tagId }).then((r) => r.data);
+
+export const removeBranchTag = (branchId, tagId) =>
+  api.delete(`/branches/${branchId}/tags/${tagId}`).then((r) => r.data);
+
 export const getSessionMemory = (sessionId) =>
   api.get(`/sessions/${sessionId}/memory`).then((r) => r.data);
+
+export const updateSessionMemory = (sessionId, memory) =>
+  api.patch(`/sessions/${sessionId}/memory`, { memory }).then((r) => r.data);
+
+export const extractSessionMemory = (sessionId) =>
+  api.post(`/sessions/${sessionId}/memory/extract`).then((r) => r.data);
 
 export default api;
