@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listSessions, createSession, getSessionGraph } from "./api";
+import { listSessions, createSession, getSessionGraph, deleteSession } from "./api";
 import SessionSidebar from "./components/SessionSidebar";
 import ChatPanel from "./components/ChatPanel";
 import GraphPanel from "./components/GraphPanel";
@@ -50,6 +50,18 @@ function App() {
     await refreshGraph(created.id);
   };
 
+  const handleDeleteSession = async (sid) => {
+    if (sid) {
+      await deleteSession(sid);
+      if (sid === sessionId) {
+        setSessionId(null);
+        setBranchId(null);
+        setGraph(null);
+      }
+    }
+    await refreshSessions();
+  };
+
   const handleBranchCreated = async (branch) => {
     await refreshGraph(sessionId);
     setBranchId(branch.id);
@@ -67,6 +79,7 @@ function App() {
         selectedSessionId={sessionId}
         onSelect={handleSelectSession}
         onCreate={handleCreateSession}
+        onDelete={handleDeleteSession}
         onSelectBranch={handleSelectBranch}
       />
       <div className="chat-area">

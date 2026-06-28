@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.schemas import (
-    ChatRequest, ChatResponse, MessageOut, BranchOut, CreateBranchRequest,
-    UpdateBranchNameRequest, PatchBranchRequest, MergeBranchRequest,
+    ChatRequest, ChatResponse, MessageOut, BranchOut, BranchTrashOut,
+    CreateBranchRequest, UpdateBranchNameRequest, PatchBranchRequest, MergeBranchRequest,
 )
 from app.repositories import repository
 from app.services import llm_service, auto_tagger, context_builder
@@ -208,3 +208,39 @@ def branch_thread(branch_id: str, db: Session = Depends(get_db)):
     if branch.head_id is None:
         return []
     return repository.get_thread(db, branch.head_id)
+
+
+@router.get("/sessions/{session_id}/branch-trash", response_model=list[BranchTrashOut], summary="브랜치 휴지통 목록")
+def list_branch_trash(session_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """세션의 브랜치 휴지통 목록을 반환합니다.
+
+    - 삭제된 지 7일이 지난 브랜치는 조회 시 백그라운드에서 자동으로 영구 삭제됩니다.
+    - 하위 브랜치가 함께 삭제된 경우 모두 목록에 포함됩니다.
+    """
+    background_tasks.add_task(repository.purge_expired_branches, db)
+    return repository.list_branch_trash(db, session_id)
+
+
+@router.post("/branches/{branch_id}/restore", response_model=BranchOut, summary="브랜치 복원")
+def restore_branch(branch_id: str, db: Session = Depends(get_db)):
+    """휴지통에서 브랜치를 복원합니다.
+
+    - 복원된 브랜치는 다시 active 상태가 됩니다.
+    - 함께 삭제된 하위 브랜치는 자동 복원되지 않으며, 개별적으로 복원해야 합니다.
+    """
+    branch = repository.restore_branch(db, branch_id)
+    if branch is None:
+        raise HTTPException(status_code=404, detail="휴지통에서 해당 branch를 찾을 수 없습니다.")
+    return _with_merge_parent_ids(db, branch)
+
+
+@router.delete("/branches/{branch_id}", status_code=204, summary="브랜치 즉시 영구 삭제")
+def purge_branch(branch_id: str, db: Session = Depends(get_db)):
+    """브랜치를 즉시 영구 삭제합니다.
+
+    - 브랜치에 속한 메시지·태그·임베딩과 하위 브랜치가 모두 삭제됩니다.
+    - 복원이 불가능하므로 주의하세요.
+    """
+    ok = repository.purge_branch(db, branch_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="branch를 찾을 수 없습니다.")

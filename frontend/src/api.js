@@ -97,4 +97,24 @@ export const updateSessionMemory = (sessionId, memory) =>
 export const extractSessionMemory = (sessionId) =>
   api.post(`/sessions/${sessionId}/memory/extract`).then((r) => r.data);
 
+export const listBranchTrash = (sessionId) =>
+  api.get(`/sessions/${sessionId}/branch-trash`).then((r) => r.data);
+
+export const restoreBranch = (branchId) =>
+  api.post(`/branches/${branchId}/restore`).then((r) => r.data);
+
+export const purgeBranch = (branchId) =>
+  api.delete(`/branches/${branchId}`);
+
+export const deleteSession = (sessionId) =>
+  api.delete(`/sessions/${sessionId}`);
+
+export const listTrash = () => api.get("/trash").then((r) => r.data);
+
+export const restoreSession = (sessionId) =>
+  api.post(`/trash/${sessionId}/restore`).then((r) => r.data);
+
+export const purgeSession = (sessionId) =>
+  api.delete(`/trash/${sessionId}`);
+
 export default api;
