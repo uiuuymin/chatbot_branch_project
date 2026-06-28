@@ -141,10 +141,21 @@ def update_branch_status(db, branch_id: str, status: str | None, is_collapsed: b
         raise ValueError("root branch는 비활성화하거나 삭제할 수 없습니다")
     if status is not None:
         branch.status = status
+        if status == "deleted":
+            _cascade_delete_children(db, branch_id)
     if is_collapsed is not None:
         branch.is_collapsed = is_collapsed
     db.commit()
     return branch
+
+
+def _cascade_delete_children(db, branch_id: str) -> None:
+    """branch_id를 fork한 모든 하위 브랜치를 재귀적으로 deleted 처리한다."""
+    children = db.query(Branch).filter(Branch.parent_branch_id == branch_id).all()
+    for child in children:
+        if child.status != "deleted":
+            child.status = "deleted"
+            _cascade_delete_children(db, child.id)
 
 
 def get_message_count_by_branch(db, session_id: str) -> dict:

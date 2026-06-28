@@ -122,6 +122,7 @@ def patch_branch(branch_id: str, req: PatchBranchRequest, db: Session = Depends(
     - `status`: `inactive`(비활성화) / `deleted`(소프트 삭제) / `active`(복구)
     - `is_collapsed`: 그래프에서 브랜치를 접을지 여부
     - root branch(main)는 inactive / deleted로 변경할 수 없습니다.
+    - `deleted`로 변경하면 이 브랜치에서 fork된 모든 하위 브랜치도 함께 deleted 처리됩니다 (재귀적).
     - 변경하고 싶은 필드만 body에 포함하면 됩니다 (나머지는 유지).
     """
     if req.status is not None and req.status not in ("active", "inactive", "deleted"):

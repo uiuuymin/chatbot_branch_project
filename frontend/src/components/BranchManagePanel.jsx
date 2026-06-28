@@ -85,6 +85,9 @@ export default function BranchManagePanel({ sessionId, branchId, onChanged }) {
   };
 
   const handleStatusChange = async (status) => {
+    if (status === "deleted" && !window.confirm("이 브랜치를 삭제하면 여기서 분기된 하위 브랜치도 모두 함께 삭제됩니다. 계속할까요?")) {
+      return;
+    }
     setBusy(true);
     try {
       await patchBranch(branchId, { status });
