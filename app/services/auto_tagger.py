@@ -97,13 +97,17 @@ def extract_user_memory(messages: list) -> str:
     return response.choices[0].message.content.strip()
 
 
-def auto_tag_branch(db, session_id: str, branch_id: str) -> list[str]:
-    """브랜치 전체 대화를 분석해 태그를 자동 생성하고 브랜치에 부여한다.
+def auto_tag_branch(db, session_id: str, branch_id: str, after_message_id: int | None = None) -> list[str]:
+    """브랜치 대화를 분석해 태그를 자동 생성하고 브랜치에 부여한다.
 
+    after_message_id가 주어지면 그 이후 메시지만 사용한다 (fork 시 부모 브랜치 태깅 용도).
     세션에 같은 이름의 태그가 이미 있으면 재사용한다.
     메시지가 없으면 빈 리스트를 반환한다.
     """
-    messages = repository.get_branch_messages(db, branch_id)
+    if after_message_id is not None:
+        messages = repository.get_branch_messages_after(db, branch_id, after_message_id)
+    else:
+        messages = repository.get_branch_messages(db, branch_id)
     if not messages:
         return []
 

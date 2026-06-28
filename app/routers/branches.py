@@ -53,7 +53,7 @@ def make_branch(req: CreateBranchRequest, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    auto_tagger.auto_tag_branch(db, req.session_id, req.parent_branch_id)
+    auto_tagger.auto_tag_branch(db, req.session_id, req.parent_branch_id, after_message_id=req.fork_from_message_id)
     return branch
 
 

@@ -52,6 +52,20 @@ def get_branch_messages(db, branch_id: str) -> list:
     )
 
 
+def get_branch_messages_after(db, branch_id: str, after_message_id: int) -> list:
+    """branch의 메시지 중 after_message_id 이후(exclusive) 메시지를 시간순으로 반환한다."""
+    return (
+        db.query(Message)
+        .filter(
+            Message.branch_id == branch_id,
+            Message.id > after_message_id,
+            Message.status == "active",
+        )
+        .order_by(Message.id)
+        .all()
+    )
+
+
 def get_messages_until(db, branch_id: str, until_message_id: int) -> list:
     """branch의 메시지 중 until_message_id까지(포함) 시간순으로 반환한다."""
     return (

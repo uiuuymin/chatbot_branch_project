@@ -122,6 +122,25 @@ class BranchSearchResult(BaseModel):
     tags: list[str]
 
 
+# ── Merge ─────────────────────────────────────────────────────────────────────
+
+class MergeRequest(BaseModel):
+    branch_id_1: str
+    branch_id_2: str
+    session_id: str
+    parent_branch_id: str
+    fork_from_message_id: int
+    name: str | None = None
+    model_provider: str = "openai"
+    model_name: str = "gpt-4o"
+
+
+class MergeResponse(BaseModel):
+    branch_id: str
+    merge_summary: str
+    merged_content: str
+
+
 # ── Graph ─────────────────────────────────────────────────────────────────────
 
 class GraphNode(BaseModel):
