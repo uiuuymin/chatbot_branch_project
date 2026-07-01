@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone, timedelta
 
-from app.models.models import Message, Branch, Conversation, Tag, BranchTag, BranchMergeParent, MessageTag, Embedding
+from app.models.models import Message, Branch, Conversation, Tag, BranchTag, BranchMergeParent, MessageTag, Embedding, UploadedFile
 
 
 # ── Message ───────────────────────────────────────────────────────────────────
@@ -534,3 +534,49 @@ def get_session_embeddings(db, session_id: str, exclude_branch_ids: list[str]):
     if exclude_branch_ids:
         query = query.filter(Message.branch_id.notin_(exclude_branch_ids))
     return query.all()
+
+
+# ── UploadedFile ──────────────────────────────────────────────────────────────
+
+def save_file(db, session_id: str, filename: str, extracted_text: str,
+              summary: str | None = None, branch_id: str | None = None) -> UploadedFile:
+    f = UploadedFile(
+        id=str(uuid.uuid4()),
+        session_id=session_id,
+        branch_id=branch_id,
+        filename=filename,
+        extracted_text=extracted_text,
+        summary=summary,
+    )
+    db.add(f)
+    db.commit()
+    return f
+
+
+def get_branch_files(db, branch_id: str) -> list[UploadedFile]:
+    """해당 브랜치 전용 파일 목록을 반환한다."""
+    return (
+        db.query(UploadedFile)
+        .filter(UploadedFile.branch_id == branch_id)
+        .order_by(UploadedFile.created_at)
+        .all()
+    )
+
+
+def get_session_files(db, session_id: str) -> list[UploadedFile]:
+    """세션 전체 공유 파일 목록을 반환한다 (branch_id가 None인 것)."""
+    return (
+        db.query(UploadedFile)
+        .filter(UploadedFile.session_id == session_id, UploadedFile.branch_id.is_(None))
+        .order_by(UploadedFile.created_at)
+        .all()
+    )
+
+
+def delete_file(db, file_id: str) -> bool:
+    f = db.query(UploadedFile).filter(UploadedFile.id == file_id).first()
+    if f is None:
+        return False
+    db.delete(f)
+    db.commit()
+    return True

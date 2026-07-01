@@ -8,9 +8,37 @@ load_dotenv()
 
 SYSTEM_PROMPT = "너는 친절한 한국어 챗봇이야. 질문에 간결하고 정확하게 답해줘."
 
+_FILE_TOOL = {
+    "name": "get_file_content",
+    "description": "파일의 전체 내용을 가져옵니다. 요약만으로 정확한 답변이 어려울 때만 사용하세요.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "filename": {
+                "type": "string",
+                "description": "전체 내용을 가져올 파일 이름",
+            }
+        },
+        "required": ["filename"],
+    },
+}
 
-def generate_reply(context: list[dict], model_provider: str, model_name: str) -> tuple[str, int, int]:
+
+def _make_file_tool_handler(file_lookup: dict[str, str]):
+    def handler(tool_name: str, args: dict) -> str:
+        if tool_name == "get_file_content":
+            filename = args.get("filename", "")
+            return file_lookup.get(filename, f"파일 '{filename}'을 찾을 수 없습니다.")
+        return "알 수 없는 도구입니다."
+    return handler
+
+
+def _generate(context, model_provider, model_name, file_lookup):
     provider = get_provider(model_provider)
+    if file_lookup:
+        return provider.generate_with_tools(
+            context, model_name, SYSTEM_PROMPT, [_FILE_TOOL], _make_file_tool_handler(file_lookup)
+        )
     return provider.generate(context, model_name, SYSTEM_PROMPT)
 
 
@@ -28,6 +56,13 @@ def handle_chat(db, req) -> str:
 
     context = context_builder.build_context(db, req.branch_id, req.message)
 
+    # 파일 도구 핸들러용 full-text 조회 (요약은 context_builder에서 이미 주입됨)
+    all_files = (
+        repository.get_session_files(db, branch.session_id)
+        + repository.get_branch_files(db, req.branch_id)
+    )
+    file_lookup = {f.filename: f.extracted_text for f in all_files} if all_files else {}
+
     user_msg = repository.save_message(
         db,
         session_id=branch.session_id,
@@ -40,7 +75,9 @@ def handle_chat(db, req) -> str:
     )
 
     try:
-        answer, input_tokens, output_tokens = generate_reply(context, req.model_provider, req.model_name)
+        answer, input_tokens, output_tokens = _generate(
+            context, req.model_provider, req.model_name, file_lookup
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
@@ -66,7 +103,7 @@ def handle_chat(db, req) -> str:
         embedding_service.save_message_embedding(db, user_msg.id, req.message)
         embedding_service.save_message_embedding(db, bot_msg.id, answer)
     except Exception:
-        pass  # embedding 실패가 채팅을 막으면 안 됨
+        pass
 
     if is_first_message:
         title = auto_tagger.generate_session_name(req.message, answer)

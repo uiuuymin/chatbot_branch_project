@@ -439,3 +439,107 @@ body {
 .status-dot.deleted {
   background: #dc2626;
 }
+
+.file-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.file-header-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  flex: 1;
+}
+
+.file-header-hint {
+  font-weight: 400;
+  color: #9ca3af;
+  margin-left: 4px;
+}
+
+.file-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.file-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #e0e7ff;
+  border-radius: 12px;
+  font-size: 12px;
+  max-width: 200px;
+}
+
+.file-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-chip-del {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: #6366f1;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.file-upload-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.file-upload-btn--session {
+  border-color: #a5b4fc;
+  background: #eef2ff;
+}
+
+.file-chip--session {
+  background: #fef3c7;
+}
+
+.file-chip-scope {
+  font-size: 10px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fde68a;
+  border-radius: 4px;
+  padding: 1px 4px;
+  flex-shrink: 0;
+}

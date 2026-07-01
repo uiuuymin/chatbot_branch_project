@@ -154,6 +154,19 @@ class BranchSearchResult(BaseModel):
     tags: list[str]
 
 
+# ── File ─────────────────────────────────────────────────────────────────────
+
+class FileOut(BaseModel):
+    id: str
+    session_id: str
+    branch_id: str | None   # None = 세션 전체 공유 파일
+    filename: str
+    summary: str | None
+    created_at: str
+
+    model_config = {"from_attributes": True}
+
+
 # ── Graph ─────────────────────────────────────────────────────────────────────
 
 class GraphNode(BaseModel):

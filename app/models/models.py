@@ -90,6 +90,18 @@ class BranchTag(Base):
     created_at = Column(Text, nullable=False, server_default=text("(datetime('now'))"))
 
 
+class UploadedFile(Base):
+    __tablename__ = "uploaded_files"
+
+    id = Column(Text, primary_key=True)
+    session_id = Column(Text, ForeignKey("conversations.id"), nullable=False)
+    branch_id = Column(Text, ForeignKey("branches.id"), nullable=True)   # None = 세션 전체 공유
+    filename = Column(Text, nullable=False)
+    extracted_text = Column(Text, nullable=False)
+    summary = Column(Text, nullable=True)
+    created_at = Column(Text, nullable=False, server_default=text("(datetime('now'))"))
+
+
 class Embedding(Base):
     __tablename__ = "embeddings"
 
