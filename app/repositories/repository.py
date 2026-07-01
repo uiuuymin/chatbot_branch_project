@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime, timezone, timedelta
 
-from app.models.models import Message, Branch, Conversation, Tag, BranchTag, BranchMergeParent
+from app.models.models import Message, Branch, Conversation, Tag, BranchTag, BranchMergeParent, MessageTag, Embedding
 
 
 # ── Message ───────────────────────────────────────────────────────────────────
@@ -71,9 +72,77 @@ def get_messages_until(db, branch_id: str, until_message_id: int) -> list:
 def list_conversations(db):
     return (
         db.query(Conversation)
+        .filter(Conversation.status == "active")
         .order_by(Conversation.created_at.desc())
         .all()
     )
+
+
+def soft_delete_session(db, session_id: str) -> Conversation | None:
+    conv = db.query(Conversation).filter(Conversation.id == session_id).first()
+    if conv is None:
+        return None
+    conv.status = "deleted"
+    conv.deleted_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    db.commit()
+    return conv
+
+
+def list_trash(db) -> list[Conversation]:
+    return (
+        db.query(Conversation)
+        .filter(Conversation.status == "deleted")
+        .order_by(Conversation.deleted_at.desc())
+        .all()
+    )
+
+
+def restore_session(db, session_id: str) -> Conversation | None:
+    conv = db.query(Conversation).filter(
+        Conversation.id == session_id,
+        Conversation.status == "deleted",
+    ).first()
+    if conv is None:
+        return None
+    conv.status = "active"
+    conv.deleted_at = None
+    db.commit()
+    return conv
+
+
+def purge_session(db, session_id: str) -> bool:
+    """세션과 연관 데이터를 모두 영구 삭제한다 (FK 순서 준수)."""
+    branch_ids = [b.id for b in db.query(Branch.id).filter(Branch.session_id == session_id).all()]
+    msg_ids = [m.id for m in db.query(Message.id).filter(Message.session_id == session_id).all()]
+
+    if msg_ids:
+        db.query(MessageTag).filter(MessageTag.message_id.in_(msg_ids)).delete(synchronize_session=False)
+        db.query(Embedding).filter(Embedding.message_id.in_(msg_ids)).delete(synchronize_session=False)
+    if branch_ids:
+        db.query(BranchMergeParent).filter(BranchMergeParent.branch_id.in_(branch_ids)).delete(synchronize_session=False)
+        db.query(BranchTag).filter(BranchTag.branch_id.in_(branch_ids)).delete(synchronize_session=False)
+
+    db.query(Message).filter(Message.session_id == session_id).delete(synchronize_session=False)
+    db.query(Branch).filter(Branch.session_id == session_id).delete(synchronize_session=False)
+    db.query(Tag).filter(Tag.session_id == session_id).delete(synchronize_session=False)
+    deleted = db.query(Conversation).filter(Conversation.id == session_id).delete(synchronize_session=False)
+    db.commit()
+    return deleted > 0
+
+
+def purge_expired_sessions(db) -> int:
+    """deleted_at 기준 7일이 지난 세션을 영구 삭제하고 삭제된 수를 반환한다."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+    expired = (
+        db.query(Conversation)
+        .filter(Conversation.status == "deleted", Conversation.deleted_at <= cutoff)
+        .all()
+    )
+    count = 0
+    for conv in expired:
+        if purge_session(db, conv.id):
+            count += 1
+    return count
 
 
 def create_conversation(db, title="새 대화"):
@@ -142,20 +211,25 @@ def update_branch_status(db, branch_id: str, status: str | None, is_collapsed: b
     if status is not None:
         branch.status = status
         if status == "deleted":
-            _cascade_delete_children(db, branch_id)
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+            branch.deleted_at = now
+            _cascade_delete_children(db, branch_id, now)
+        elif status == "active":
+            branch.deleted_at = None
     if is_collapsed is not None:
         branch.is_collapsed = is_collapsed
     db.commit()
     return branch
 
 
-def _cascade_delete_children(db, branch_id: str) -> None:
+def _cascade_delete_children(db, branch_id: str, deleted_at: str) -> None:
     """branch_id를 fork한 모든 하위 브랜치를 재귀적으로 deleted 처리한다."""
     children = db.query(Branch).filter(Branch.parent_branch_id == branch_id).all()
     for child in children:
         if child.status != "deleted":
             child.status = "deleted"
-            _cascade_delete_children(db, child.id)
+            child.deleted_at = deleted_at
+            _cascade_delete_children(db, child.id, deleted_at)
 
 
 def get_message_count_by_branch(db, session_id: str) -> dict:
@@ -242,34 +316,69 @@ def create_merge_branch(db, session_id: str, parent_summaries: dict[str, str], n
     return branch
 
 
-def select_main_branch(db, branch_id: str) -> list[str]:
-    """branch_id와 그 모든 조상 브랜치를 is_main=True로 표시하고, 나머지는 False로 초기화한다.
+def list_branch_trash(db, session_id: str) -> list:
+    return (
+        db.query(Branch)
+        .filter(
+            Branch.session_id == session_id,
+            Branch.status == "deleted",
+            Branch.deleted_at.isnot(None),
+        )
+        .order_by(Branch.deleted_at.desc())
+        .all()
+    )
 
-    반환값: is_main으로 선택된 branch_id 목록 (선택 브랜치 + 모든 조상, 루트 → 선택 순)
-    """
-    target = get_branch(db, branch_id)
-    if target is None:
-        raise ValueError("branch를 찾을 수 없습니다")
 
-    # 선택 브랜치에서 루트까지 조상 체인 수집
-    chain_ids: list[str] = []
-    current = target
-    while current is not None:
-        chain_ids.append(current.id)
-        if current.parent_branch_id is None:
-            break
-        current = get_branch(db, current.parent_branch_id)
-
-    chain_set = set(chain_ids)
-
-    # 세션 내 모든 브랜치 is_main 초기화
-    session_branches = db.query(Branch).filter(Branch.session_id == target.session_id).all()
-    for branch in session_branches:
-        branch.is_main = branch.id in chain_set
-
+def restore_branch(db, branch_id: str) -> Branch | None:
+    branch = db.query(Branch).filter(
+        Branch.id == branch_id, Branch.status == "deleted"
+    ).first()
+    if branch is None:
+        return None
+    branch.status = "active"
+    branch.deleted_at = None
     db.commit()
-    chain_ids.reverse()  # 루트 → 선택 브랜치 순으로 반환
-    return chain_ids
+    return branch
+
+
+def _purge_branch_no_commit(db, branch_id: str) -> None:
+    children = db.query(Branch).filter(Branch.parent_branch_id == branch_id).all()
+    for child in children:
+        _purge_branch_no_commit(db, child.id)
+
+    msg_ids = [m.id for m in db.query(Message.id).filter(Message.branch_id == branch_id).all()]
+    if msg_ids:
+        db.query(MessageTag).filter(MessageTag.message_id.in_(msg_ids)).delete(synchronize_session=False)
+        db.query(Embedding).filter(Embedding.message_id.in_(msg_ids)).delete(synchronize_session=False)
+    db.query(Message).filter(Message.branch_id == branch_id).delete(synchronize_session=False)
+    db.query(BranchTag).filter(BranchTag.branch_id == branch_id).delete(synchronize_session=False)
+    db.query(BranchMergeParent).filter(
+        (BranchMergeParent.branch_id == branch_id) | (BranchMergeParent.parent_branch_id == branch_id)
+    ).delete(synchronize_session=False)
+    db.query(Branch).filter(Branch.id == branch_id).delete(synchronize_session=False)
+
+
+def purge_branch(db, branch_id: str) -> bool:
+    exists = db.query(Branch).filter(Branch.id == branch_id).first()
+    if exists is None:
+        return False
+    _purge_branch_no_commit(db, branch_id)
+    db.commit()
+    return True
+
+
+def purge_expired_branches(db) -> int:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+    expired = db.query(Branch).filter(
+        Branch.status == "deleted",
+        Branch.deleted_at.isnot(None),
+        Branch.deleted_at <= cutoff,
+    ).all()
+    for branch in expired:
+        _purge_branch_no_commit(db, branch.id)
+    if expired:
+        db.commit()
+    return len(expired)
 
 
 def count_branch_chat_messages(db, branch_id: str) -> int:

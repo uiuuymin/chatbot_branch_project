@@ -10,7 +10,17 @@ import {
   addBranchTag,
   removeBranchTag,
   listSessionBranches,
+  listBranchTrash,
+  restoreBranch,
+  purgeBranch,
 } from "../api";
+
+function daysRemaining(deletedAt) {
+  if (!deletedAt) return 7;
+  const deleted = new Date(deletedAt + "Z");
+  const diff = 7 - (Date.now() - deleted.getTime()) / (1000 * 60 * 60 * 24);
+  return Math.max(0, Math.ceil(diff));
+}
 
 export default function BranchManagePanel({ sessionId, branchId, onChanged }) {
   const [branch, setBranch] = useState(null);
@@ -21,6 +31,9 @@ export default function BranchManagePanel({ sessionId, branchId, onChanged }) {
   const [newTagName, setNewTagName] = useState("");
   const [addTagId, setAddTagId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showBranchTrash, setShowBranchTrash] = useState(false);
+  const [branchTrashItems, setBranchTrashItems] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
 
   const load = async () => {
     if (!branchId || !sessionId) return;
@@ -85,7 +98,7 @@ export default function BranchManagePanel({ sessionId, branchId, onChanged }) {
   };
 
   const handleStatusChange = async (status) => {
-    if (status === "deleted" && !window.confirm("이 브랜치를 삭제하면 여기서 분기된 하위 브랜치도 모두 함께 삭제됩니다. 계속할까요?")) {
+    if (status === "deleted" && !window.confirm("이 브랜치를 휴지통으로 이동할까요?\n하위 브랜치도 함께 이동되며 7일 후 완전히 삭제됩니다.")) {
       return;
     }
     setBusy(true);
@@ -96,6 +109,44 @@ export default function BranchManagePanel({ sessionId, branchId, onChanged }) {
       alert("상태 변경 실패: " + (err.response?.data?.detail || err.message));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleOpenBranchTrash = async () => {
+    const next = !showBranchTrash;
+    setShowBranchTrash(next);
+    if (next) {
+      setTrashLoading(true);
+      try {
+        const data = await listBranchTrash(sessionId);
+        setBranchTrashItems(data);
+      } catch (err) {
+        alert("브랜치 휴지통 로딩 실패: " + (err.response?.data?.detail || err.message));
+      } finally {
+        setTrashLoading(false);
+      }
+    }
+  };
+
+  const handleRestoreBranch = async (bid) => {
+    try {
+      await restoreBranch(bid);
+      const data = await listBranchTrash(sessionId);
+      setBranchTrashItems(data);
+      await refreshAll();
+    } catch (err) {
+      alert("복원 실패: " + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handlePurgeBranch = async (bid) => {
+    if (!window.confirm("영구 삭제하면 복원이 불가능합니다. 삭제할까요?")) return;
+    try {
+      await purgeBranch(bid);
+      setBranchTrashItems((prev) => prev.filter((b) => b.id !== bid));
+      await refreshAll();
+    } catch (err) {
+      alert("영구 삭제 실패: " + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -254,6 +305,31 @@ export default function BranchManagePanel({ sessionId, branchId, onChanged }) {
           />
           <button onClick={handleCreateTag} disabled={busy || !newTagName.trim()}>생성 + 부여</button>
         </div>
+      </div>
+      <div className="bmp-section trash-section" style={{ marginTop: 20 }}>
+        <button className="trash-toggle-btn" onClick={handleOpenBranchTrash}>
+          🗑 브랜치 휴지통 {showBranchTrash ? "▲" : "▼"}
+        </button>
+        {showBranchTrash && (
+          <div className="trash-list">
+            {trashLoading && <p className="bmp-hint">불러오는 중...</p>}
+            {!trashLoading && branchTrashItems.length === 0 && (
+              <p className="bmp-hint">휴지통이 비어있습니다</p>
+            )}
+            {branchTrashItems.map((b) => (
+              <div key={b.id} className="trash-item">
+                <span className="trash-item-title">{b.name}</span>
+                <span className="trash-item-date">
+                  {daysRemaining(b.deleted_at)}일 후 완전히 삭제
+                </span>
+                <div className="trash-item-actions">
+                  <button onClick={() => handleRestoreBranch(b.id)}>복원</button>
+                  <button className="danger" onClick={() => handlePurgeBranch(b.id)}>영구삭제</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

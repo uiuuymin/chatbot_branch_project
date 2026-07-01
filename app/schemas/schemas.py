@@ -34,6 +34,15 @@ class ConversationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TrashSessionOut(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    deleted_at: str
+
+    model_config = {"from_attributes": True}
+
+
 # ── Branch ────────────────────────────────────────────────────────────────────
 
 class CreateBranchRequest(BaseModel):
@@ -56,6 +65,15 @@ class UpdateBranchNameRequest(BaseModel):
 class PatchBranchRequest(BaseModel):
     status: str | None = None        # active / inactive / deleted
     is_collapsed: bool | None = None
+
+
+class BranchTrashOut(BaseModel):
+    id: str
+    name: str
+    session_id: str
+    deleted_at: str | None
+
+    model_config = {"from_attributes": True}
 
 
 class BranchOut(BaseModel):

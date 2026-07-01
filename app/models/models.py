@@ -8,6 +8,8 @@ class Conversation(Base):
     id = Column(Text, primary_key=True)
     title = Column(Text, nullable=False, server_default="새 대화")
     memory = Column(Text, nullable=True)  # 브랜치 무관 공유 메모리
+    status = Column(Text, nullable=False, server_default="active")  # active / deleted
+    deleted_at = Column(Text, nullable=True)  # 휴지통 이동 시각 (ISO datetime)
     created_at = Column(Text, nullable=False, server_default=text("(datetime('now'))"))
     updated_at = Column(Text, nullable=False, server_default=text("(datetime('now'))"))
 
@@ -22,6 +24,7 @@ class Branch(Base):
     name = Column(Text, nullable=False, server_default="main")
     head_id = Column(Integer, nullable=True)
     status = Column(Text, nullable=False, server_default="active")   # active / inactive / deleted
+    deleted_at = Column(Text, nullable=True)  # 휴지통 이동 시각 (ISO datetime)
     is_collapsed = Column(Boolean, nullable=False, server_default="0")
     is_merge = Column(Boolean, nullable=False, server_default="0")    # 여러 브랜치를 합친 머지 브랜치인지 여부
     is_main = Column(Boolean, nullable=False, server_default="0")     # 선택된 main 경로 여부

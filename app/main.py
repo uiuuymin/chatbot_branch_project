@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 import app.models.models  # Base에 테이블 등록
 from app.routers import sessions, branches, graph, tags
 
@@ -21,7 +23,34 @@ if "branches" in _inspector.get_table_names():
             conn.execute(text("ALTER TABLE branches ADD COLUMN is_main BOOLEAN NOT NULL DEFAULT 0"))
             conn.commit()
 
-app = FastAPI(title="LLM 채팅 브랜치 시각화 서비스")
+if "branches" in _inspector.get_table_names():
+    _existing_columns = {c["name"] for c in _inspector.get_columns("branches")}
+    if "deleted_at" not in _existing_columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE branches ADD COLUMN deleted_at TEXT"))
+            conn.commit()
+
+if "conversations" in _inspector.get_table_names():
+    _existing_columns = {c["name"] for c in _inspector.get_columns("conversations")}
+    with engine.connect() as conn:
+        if "status" not in _existing_columns:
+            conn.execute(text("ALTER TABLE conversations ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"))
+        if "deleted_at" not in _existing_columns:
+            conn.execute(text("ALTER TABLE conversations ADD COLUMN deleted_at TEXT"))
+        conn.commit()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.repositories import repository
+    db = SessionLocal()
+    try:
+        repository.purge_expired_sessions(db)
+        repository.purge_expired_branches(db)
+    finally:
+        db.close()
+    yield
+
+app = FastAPI(title="LLM 채팅 브랜치 시각화 서비스", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.schemas import (
     CreateSessionRequest, SessionOut, ConversationOut, BranchOut,
     UpdateSessionTitleRequest, BranchSearchResult,
-    UpdateMemoryRequest, MemoryOut,
+    UpdateMemoryRequest, MemoryOut, TrashSessionOut,
 )
 from app.repositories import repository
 from app.services import auto_tagger
@@ -100,6 +100,54 @@ def update_session_memory(session_id: str, req: UpdateMemoryRequest, db: Session
     if conv is None:
         raise HTTPException(status_code=404, detail="session을 찾을 수 없습니다.")
     return MemoryOut(session_id=session_id, memory=conv.memory)
+
+
+@router.delete("/sessions/{session_id}", status_code=204, summary="세션 휴지통으로 이동")
+def delete_session(session_id: str, db: Session = Depends(get_db)):
+    """세션을 휴지통으로 이동합니다 (소프트 삭제).
+
+    - 세션은 즉시 삭제되지 않고 7일간 휴지통에 보관됩니다.
+    - `POST /trash/{session_id}/restore`로 복원할 수 있습니다.
+    - 7일이 지나면 자동으로 영구 삭제됩니다.
+    """
+    conv = repository.soft_delete_session(db, session_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="session을 찾을 수 없습니다.")
+
+
+@router.get("/trash", response_model=list[TrashSessionOut], summary="휴지통 목록 조회")
+def list_trash(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """휴지통에 있는 세션 목록을 반환합니다.
+
+    - 삭제된 지 7일이 지난 세션은 조회 시 백그라운드에서 자동으로 영구 삭제됩니다.
+    - `deleted_at` 기준 최신순으로 정렬됩니다.
+    """
+    background_tasks.add_task(repository.purge_expired_sessions, db)
+    return repository.list_trash(db)
+
+
+@router.post("/trash/{session_id}/restore", response_model=ConversationOut, summary="세션 복원")
+def restore_session(session_id: str, db: Session = Depends(get_db)):
+    """휴지통에서 세션을 복원합니다.
+
+    - 복원된 세션은 기존 브랜치·메시지를 모두 유지한 채 다시 활성 상태가 됩니다.
+    """
+    conv = repository.restore_session(db, session_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="휴지통에서 해당 session을 찾을 수 없습니다.")
+    return conv
+
+
+@router.delete("/trash/{session_id}", status_code=204, summary="세션 즉시 영구 삭제")
+def purge_session(session_id: str, db: Session = Depends(get_db)):
+    """휴지통의 세션을 즉시 영구 삭제합니다.
+
+    - 세션에 속한 브랜치·메시지·태그·임베딩이 모두 삭제됩니다.
+    - 복원이 불가능하므로 주의하세요.
+    """
+    ok = repository.purge_session(db, session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="휴지통에서 해당 session을 찾을 수 없습니다.")
 
 
 @router.post("/sessions/{session_id}/memory/extract", response_model=MemoryOut, summary="세션 메모리 LLM 자동 추출")
