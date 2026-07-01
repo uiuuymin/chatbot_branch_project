@@ -1,4 +1,5 @@
 .env
+.vscode
 chat.db
 
 __pycache__/
@@ -8,3 +9,12 @@ __pycache__/
 venv/
 
 .pytest_cache/
+
+.claude
+claude.md
+
+NLPAIE_3팀_기획서.pdf
+0627개발계획서.md
+내용_설명.md
+명령어_설명.md
+backend_implementation_design_plan.md

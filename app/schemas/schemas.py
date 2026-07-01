@@ -3,6 +3,10 @@ from pydantic import BaseModel
 
 # ── Session ──────────────────────────────────────────────────────────────────
 
+class homemessage(BaseModel):
+    message: str
+
+
 class CreateSessionRequest(BaseModel):
     title: str = "새 대화"
 

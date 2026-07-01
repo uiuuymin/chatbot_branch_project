@@ -5,13 +5,17 @@ from app.database import get_db
 from app.schemas.schemas import (
     CreateSessionRequest, SessionOut, ConversationOut, BranchOut,
     UpdateSessionTitleRequest, BranchSearchResult,
-    UpdateMemoryRequest, MemoryOut, TrashSessionOut,
+    UpdateMemoryRequest, MemoryOut, TrashSessionOut, homemessage
 )
 from app.repositories import repository
 from app.services import auto_tagger
 
 router = APIRouter(tags=["Sessions"])
 
+@router.get("/home", response_model=homemessage, summary="이스터에그 홈메세지")
+def home_message():
+    """홈메세지"""
+    return homemessage(message="my과 sc의 비밀 노트")
 
 @router.post("/sessions", response_model=SessionOut, summary="세션 생성")
 def new_session(req: CreateSessionRequest, db: Session = Depends(get_db)):
