@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas.schemas import (
-    ChatRequest, ChatResponse, MessageOut, BranchOut, BranchTrashOut,
-    CreateBranchRequest, UpdateBranchNameRequest, PatchBranchRequest, MergeBranchRequest,
+    ChatRequest, ChatResponse, MessageOut, BranchOut, CreateBranchRequest,
+    UpdateBranchNameRequest, PatchBranchRequest, MergeBranchRequest,
+    SelectMainBranchResponse, BranchTrashOut,
 )
 from app.repositories import repository
 from app.services import llm_service, auto_tagger, context_builder
@@ -113,6 +114,21 @@ def auto_tag_branch(branch_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="branch를 찾을 수 없습니다")
     tags = auto_tagger.auto_tag_branch(db, branch.session_id, branch_id)
     return {"branch_id": branch_id, "auto_tags": tags}
+
+
+@router.post("/branches/{branch_id}/select-main", response_model=SelectMainBranchResponse, summary="main 경로 선택")
+def select_main_branch(branch_id: str, db: Session = Depends(get_db)):
+    """선택한 브랜치와 그 모든 조상 브랜치를 main 경로로 표시합니다.
+
+    - 선택한 브랜치부터 루트까지의 부모 체인 전체에 `is_main=true`를 설정합니다.
+    - 같은 세션의 다른 브랜치는 모두 `is_main=false`로 초기화됩니다.
+    - `main_branch_ids`: 루트부터 선택 브랜치 순서로 정렬된 is_main 브랜치 ID 목록입니다.
+    """
+    try:
+        main_ids = repository.select_main_branch(db, branch_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return SelectMainBranchResponse(branch_id=branch_id, main_branch_ids=main_ids)
 
 
 @router.patch("/branches/{branch_id}", response_model=BranchOut, summary="브랜치 상태/접힘 수정")

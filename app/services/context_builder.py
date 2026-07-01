@@ -32,11 +32,25 @@ def build_context(db, branch_id: str, new_user_message: str) -> list[dict]:
     except Exception:
         similar = []
 
+    session_files = repository.get_session_files(db, branch.session_id)
+    branch_files = repository.get_branch_files(db, branch_id)
+    all_files = session_files + branch_files
+
     result = []
 
     if memory:
         result.append({"role": "user", "content": f"[사용자 정보]\n{memory}"})
         result.append({"role": "assistant", "content": "알겠습니다. 해당 정보를 기억하겠습니다."})
+
+    if all_files:
+        # 요약만 주입. 전체 텍스트는 llm_service의 tool handler가 필요 시 제공한다.
+        lines = []
+        for f in all_files:
+            scope = "세션 공유" if f.branch_id is None else "브랜치"
+            desc = f.summary or "(요약 없음)"
+            lines.append(f"- [{scope}] {f.filename}: {desc}")
+        result.append({"role": "user", "content": "[첨부 파일 목록]\n" + "\n".join(lines)})
+        result.append({"role": "assistant", "content": "파일 목록을 확인했습니다. 전체 내용이 필요하면 도구를 사용하겠습니다."})
 
     if similar:
         refs = "\n".join([f"- {m.content}" for m in similar])

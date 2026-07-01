@@ -6,7 +6,16 @@ from sqlalchemy import inspect, text
 
 from app.database import engine, Base, SessionLocal
 import app.models.models  # Base에 테이블 등록
-from app.routers import sessions, branches, graph, tags
+from app.routers import sessions, branches, graph, tags, files
+
+# uploaded_files 스키마 변경(session_id 추가) 대응: 구버전 테이블이면 삭제 후 재생성
+_pre_inspector = inspect(engine)
+if "uploaded_files" in _pre_inspector.get_table_names():
+    _file_cols = {c["name"] for c in _pre_inspector.get_columns("uploaded_files")}
+    if "session_id" not in _file_cols:
+        with engine.connect() as _conn:
+            _conn.execute(text("DROP TABLE uploaded_files"))
+            _conn.commit()
 
 Base.metadata.create_all(bind=engine)
 
@@ -18,9 +27,10 @@ if "branches" in _inspector.get_table_names():
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE branches ADD COLUMN is_merge BOOLEAN NOT NULL DEFAULT 0"))
             conn.commit()
-
-if "branches" in _inspector.get_table_names():
-    _existing_columns = {c["name"] for c in _inspector.get_columns("branches")}
+    if "is_main" not in _existing_columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE branches ADD COLUMN is_main BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
     if "deleted_at" not in _existing_columns:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE branches ADD COLUMN deleted_at TEXT"))
@@ -34,6 +44,14 @@ if "conversations" in _inspector.get_table_names():
         if "deleted_at" not in _existing_columns:
             conn.execute(text("ALTER TABLE conversations ADD COLUMN deleted_at TEXT"))
         conn.commit()
+
+if "uploaded_files" in _inspector.get_table_names():
+    _file_cols = {c["name"] for c in _inspector.get_columns("uploaded_files")}
+    if "summary" not in _file_cols:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE uploaded_files ADD COLUMN summary TEXT"))
+            conn.commit()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,3 +88,4 @@ app.include_router(sessions.router)
 app.include_router(branches.router)
 app.include_router(graph.router)
 app.include_router(tags.router)
+app.include_router(files.router)

@@ -90,10 +90,16 @@ class BranchOut(BaseModel):
     status: str
     is_collapsed: bool
     is_merge: bool
+    is_main: bool
     merge_parent_ids: list[str] = []
     created_at: str
 
     model_config = {"from_attributes": True}
+
+
+class SelectMainBranchResponse(BaseModel):
+    branch_id: str
+    main_branch_ids: list[str]
 
 
 # ── Message / Chat ────────────────────────────────────────────────────────────
@@ -150,6 +156,19 @@ class BranchSearchResult(BaseModel):
     name: str
     status: str
     tags: list[str]
+
+
+# ── File ─────────────────────────────────────────────────────────────────────
+
+class FileOut(BaseModel):
+    id: str
+    session_id: str
+    branch_id: str | None   # None = 세션 전체 공유 파일
+    filename: str
+    summary: str | None
+    created_at: str
+
+    model_config = {"from_attributes": True}
 
 
 # ── Graph ─────────────────────────────────────────────────────────────────────

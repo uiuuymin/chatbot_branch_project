@@ -117,4 +117,28 @@ export const restoreSession = (sessionId) =>
 export const purgeSession = (sessionId) =>
   api.delete(`/trash/${sessionId}`);
 
+export const uploadFile = (branchId, file, modelProvider = "openai", modelName = "gpt-4o-mini") => {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("model_provider", modelProvider);
+  form.append("model_name", modelName);
+  return api.post(`/branches/${branchId}/upload`, form).then((r) => r.data);
+};
+
+export const uploadSessionFile = (sessionId, file, modelProvider = "openai", modelName = "gpt-4o-mini") => {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("model_provider", modelProvider);
+  form.append("model_name", modelName);
+  return api.post(`/sessions/${sessionId}/upload`, form).then((r) => r.data);
+};
+
+export const getBranchFiles = (branchId) =>
+  api.get(`/branches/${branchId}/files`).then((r) => r.data);
+
+export const getSessionFiles = (sessionId) =>
+  api.get(`/sessions/${sessionId}/files`).then((r) => r.data);
+
+export const deleteFile = (fileId) => api.delete(`/files/${fileId}`);
+
 export default api;
