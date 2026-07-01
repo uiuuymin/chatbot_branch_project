@@ -68,10 +68,16 @@ class BranchOut(BaseModel):
     status: str
     is_collapsed: bool
     is_merge: bool
+    is_main: bool
     merge_parent_ids: list[str] = []
     created_at: str
 
     model_config = {"from_attributes": True}
+
+
+class SelectMainBranchResponse(BaseModel):
+    branch_id: str
+    main_branch_ids: list[str]
 
 
 # ── Message / Chat ────────────────────────────────────────────────────────────

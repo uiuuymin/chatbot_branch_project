@@ -242,6 +242,36 @@ def create_merge_branch(db, session_id: str, parent_summaries: dict[str, str], n
     return branch
 
 
+def select_main_branch(db, branch_id: str) -> list[str]:
+    """branch_id와 그 모든 조상 브랜치를 is_main=True로 표시하고, 나머지는 False로 초기화한다.
+
+    반환값: is_main으로 선택된 branch_id 목록 (선택 브랜치 + 모든 조상, 루트 → 선택 순)
+    """
+    target = get_branch(db, branch_id)
+    if target is None:
+        raise ValueError("branch를 찾을 수 없습니다")
+
+    # 선택 브랜치에서 루트까지 조상 체인 수집
+    chain_ids: list[str] = []
+    current = target
+    while current is not None:
+        chain_ids.append(current.id)
+        if current.parent_branch_id is None:
+            break
+        current = get_branch(db, current.parent_branch_id)
+
+    chain_set = set(chain_ids)
+
+    # 세션 내 모든 브랜치 is_main 초기화
+    session_branches = db.query(Branch).filter(Branch.session_id == target.session_id).all()
+    for branch in session_branches:
+        branch.is_main = branch.id in chain_set
+
+    db.commit()
+    chain_ids.reverse()  # 루트 → 선택 브랜치 순으로 반환
+    return chain_ids
+
+
 def count_branch_chat_messages(db, branch_id: str) -> int:
     """머지 시 자동 삽입된 요약 메시지를 제외하고, 실제 채팅으로 만들어진 메시지 수를 센다.
 

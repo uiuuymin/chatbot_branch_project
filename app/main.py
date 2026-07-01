@@ -16,6 +16,10 @@ if "branches" in _inspector.get_table_names():
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE branches ADD COLUMN is_merge BOOLEAN NOT NULL DEFAULT 0"))
             conn.commit()
+    if "is_main" not in _existing_columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE branches ADD COLUMN is_main BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
 
 app = FastAPI(title="LLM 채팅 브랜치 시각화 서비스")
 
